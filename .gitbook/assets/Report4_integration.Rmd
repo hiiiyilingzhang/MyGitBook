@@ -1,0 +1,1114 @@
+---
+title: "Report4 new_integration"
+author: "zhangyl"
+date: "`r Sys.Date()`"
+output:
+  rmdformats::readthedown:
+    self contained: true
+    thumbnails: false
+    lightbox: true
+    df_print: paged
+    code_folding: show
+    gallery: false
+    highlight: tango
+---
+
+
+```{r include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+	message = FALSE,
+	warning = FALSE,
+	fig.align = "center",
+  fig.width = 6,
+  autodep = TRUE,
+  cache.lazy = FALSE
+)
+
+
+.libPaths(new=c("/bioapps/Rlibs/3.5.2","/public/workspace/zhangyl/R/x86_64-redhat-linux-gnu-library/3.5"))
+
+```
+
+---
+
+RDS Data Description:  
+
+* raw.data/: 所有原始数据  
+
+* clean.obj/clean-Singleron.RDS: 经过去Doublets+QC后数据  
+* clean.obj/clean-10X.RDS: 经过去Doublets+QC后数据  
+
+
+* integrated.obj/integrated-by-platform.RDS: 用Harmony去除了平台间的批次效应，并添加详细MetaData
+* integrated.obj/integrated-by-sample-harmony.RDS: 用Harmony去除了样本间的批次效应
+* integrated.obj/integrated-by-sample-seurat.RDS: 用seurat的内置方法去除了样本间的批次效应
+* integrated.obj/integrated-by-sample-cluster.RDS: 用seurat的内置方法去除了样本间的批次效应，完成`FindCluster`
+
+
+* ERM.obj/ERMData: 提取ERM样本，已完成`FindClusters()`
+* ERM.obj/ERMData-rawAnno-Res3.RDS: 经过SingleR注释后的数据，基于`resolution=0.3`  
+
+
+* PBMC.obj/raw-integratedPBMC.RDS: 经过`IntegrateData()`后的数据, 没做`PCA()`
+* PBMC.obj/precessed-integratedPBMC.RDS: 完成`PCA()`, `FindClusters()`之后的
+* PBMC.obj/integratedPBMC-rawAnno.RDS: 经过SingleR注释后的数据，基于`resolution=0.3`
+
+---
+
+# 1. Initialize Data
+```{r}
+library(Seurat)
+library(dplyr)
+library(ggplot2)
+library(cowplot)
+
+library(rlang)
+```
+
+```{r}
+packageVersion("Seurat")
+```
+
+## 1.1 Read in and Initialize Seurat Obejct
+
+**Singleron**:  
+```{r cache = TRUE}
+raw.p1ERM <- read.table("data/raw.data/patient_1/PDR-ERM-0426_matrix.tsv.gz",header = T) %>% CreateSeuratObject(project = "p1-ERM")
+raw.p1Blood <- read.table("data/raw.data/patient_1/PDR-Blood-0426_matrix.tsv.gz", header = T) %>% CreateSeuratObject(project = "p1-Blood")
+
+raw.p2ERM <- read.table("data/raw.data/patient_2/PDR-ERM_matrix.tsv.gz", header = T) %>% CreateSeuratObject(project = "p2-ERM")
+raw.p2Blood <- read.table("data/raw.data/patient_2/PDR-Blood_matrix.tsv.gz", header = T) %>% CreateSeuratObject(project = "p2-Blood")
+
+raw.p3ERM <- read.table("data/raw.data/patient_3/PDR-ERM-0609_matrix.tsv.gz",header = T) %>% CreateSeuratObject(project = "p3-ERM")
+raw.p3Blood <- read.table("data/raw.data/patient_3/PDR-blood-0609_matrix.tsv.gz",header = T) %>% CreateSeuratObject(project = "p3-Blood")
+
+raw.p4ERM <- read.table("data/raw.data/patient_4/PDR-ERM-210630_matrix.tsv.gz",header = T) %>% CreateSeuratObject(project = "p4-ERM")
+raw.p4Blood <- read.table("data/raw.data/patient_4/PDR-B-210630_matrix.tsv.gz",header = T) %>% CreateSeuratObject(project = "p4-Blood")
+
+raw.ctl1.Singleron <- read.table("data/raw.data/control_PBMC/mid-aged/DZ0804_matrix.tsv.gz",header = T) %>% CreateSeuratObject()
+```
+
+**10X**: 
+```{r cache = TRUE}
+raw.ctl2.10X <- Read10X(data.dir = "data/raw.data/control_PBMC/mid-aged/GSM5335490_C1/C1/") %>% CreateSeuratObject(project = "10X_ctr2")
+
+raw.ctl3.10X <- Read10X(data.dir = "data/raw.data/control_PBMC/mid-aged/GSM5335491_C2/C2/") %>% CreateSeuratObject(project = "10X_ctr3")
+
+raw.ctl4.10X <- Read10X(data.dir = "data/raw.data/control_PBMC/young/GSM4905216_YYZ/YYZ/") %>% CreateSeuratObject(project = "10X_ctr4")
+
+raw.ctl5.10X <- Read10X(data.dir = "data/raw.data/control_PBMC/young/GSM4905217_YTK/YTK/") %>% CreateSeuratObject(project = "10X_ctr5")
+
+raw.ctl6.10X <- Read10X(data.dir = "data/raw.data/control_PBMC/young/GSM4954813_C-1/") %>% CreateSeuratObject(project = "10X_ctr6")
+```
+
+## 1.2 Merge data
+
+**Singleron**: 
+```{r}
+raw.Singleron <- merge(x = raw.p1ERM, y = c(raw.p1Blood, raw.p2ERM, raw.p2Blood,raw.p3ERM, raw.p3Blood, raw.p4ERM, raw.p4Blood, raw.ctl1.Singleron))
+```
+
+**10X**: 
+```{r}
+raw.10X <- merge(x = raw.ctl2.10X, y = c(raw.ctl3.10X,raw.ctl4.10X, raw.ctl5.10X, raw.ctl6.10X))
+```
+
+## 1.3 Check Data
+
+```{r}
+raw.Singleron@assays$RNA[1:5,1:5]
+```
+
+```{r}
+raw.Singleron@meta.data[1:5,]
+```
+
+```{r}
+raw.Singleron@meta.data %>% 
+  	ggplot(aes(x=orig.ident, fill=orig.ident)) + 
+  	geom_bar() +
+  	theme_classic() +
+  	theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+  	theme(plot.title = element_text(hjust=0.5, face="bold")) +
+  	ggtitle("NCells")
+```
+
+```{r}
+raw.10X@meta.data %>% 
+  	ggplot(aes(x=orig.ident, fill=orig.ident)) + 
+  	geom_bar() +
+  	theme_classic() +
+  	theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+  	theme(plot.title = element_text(hjust=0.5, face="bold")) +
+  	ggtitle("NCells")
+```
+
+---
+
+# 2. QC--Singleron
+## 2.1 Data examining
+cell number:    
+```{r}
+dim(raw.Singleron)
+```
+
+Counts per cell:    
+```{r}
+counts_per_cell <- Matrix::colSums(raw.Singleron)
+hist(log10(counts_per_cell+1),main='counts per cell',col='Thistle')
+```
+
+Genes per cell:    
+```{r}
+genes_per_cell <- Matrix::colSums(raw.Singleron@assays$RNA@counts > 0)
+hist(log10(genes_per_cell+1), main='genes per cell', col='Thistle')
+```
+
+## 2.2 Remove Doublets
+
+* [DoubletDecon](https://github.com/EDePasquale/DoubletDecon)  
+Fail to install
+
+* [DoubletFinder](https://github.com/chris-mcginnis-ucsf/DoubletFinder)
+
+```{r}
+library(DoubletFinder)
+library(patchwork)
+library(ggraph)
+library(clustree)
+library(ggsci)
+```
+
+### 2.2.1 Pre-process Seurat object
+
+```{r message=FALSE, warning=FALSE,fig.width = 5,cache = TRUE}
+raw.Singleron <- SCTransform(raw.Singleron, verbose = F)
+raw.Singleron <- RunPCA(raw.Singleron, npcs = 30, verbose = F)
+ElbowPlot(raw.Singleron,ndims = 30)
+```
+
+```{r}
+# Set dim 1:20
+pc.num=1:25
+```
+
+```{r}
+raw.Singleron <- RunUMAP(raw.Singleron, dims=pc.num,verbose = F)
+raw.Singleron <- FindNeighbors(raw.Singleron, reduction = "pca", dims = pc.num)
+```
+
+```{r fig.height=8,fig.width = 8,cache = TRUE}
+checkRes <- FindClusters(object = raw.Singleron, resolution = c(seq(.1,1.4,.2)), verbose = F)
+clustree(checkRes@meta.data,prefix = "SCT_snn_res.")
+```
+
+```{r}
+raw.Singleron <- FindClusters(raw.Singleron, resolution = 0.7)
+```
+
+### 2.2.2 pK Identification
+
+```{r eval=FALSE}
+# Optimize the parameters
+sweep.res.list <- paramSweep_v3(raw.Singleron, PCs = pc.num, sct = T)
+# Use log transform
+sweep.stats <- summarizeSweep(sweep.res.list, GT = F)
+```
+
+
+```{r include=FALSE}
+load("data/tmp.data/sweepStats-Singleron.RData")
+```
+
+
+```{r fig.width = 4}
+# Show the best parameter
+bcmvn <- find.pK(sweep.stats)
+```
+
+```{r}
+# Extract the best pK
+pK_bcmvn <- bcmvn$pK[which.max(bcmvn$BCmetric)] %>% as.character() %>% as.numeric()
+pK_bcmvn
+```
+
+### 2.2.3 Homotypic Doublet Proportion Estimate
+
+doublet rate: https://www.singleronbio.com/resources/list-19.html. Because of the various distribution of cell number detected, we set 2.68% based on the Standard Chip, just in case we miss important data especially p2-ERM(589 cells). 
+
+```{r echo=FALSE,out.width = '90%',fig.align = "center"}
+knitr::include_graphics("data/picLoaded/Singleron-doubletRate.png")
+```
+
+```{r}
+# Estimate the percentage of homotypic doublets
+homotypic.prop <- modelHomotypic(raw.Singleron$seurat_clusters)
+
+DoubletRate = 0.0268
+nExp_poi <- round(DoubletRate*ncol(raw.Singleron)) 
+# Adjust for homotypic doublets
+nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
+```
+
+### 2.2.4 Run DoubletFinder
+
+```{r eval=FALSE}
+raw.Singleron <- doubletFinder_v3(raw.Singleron, PCs = pc.num, pN = 0.25, pK = pK_bcmvn, nExp = nExp_poi.adj, reuse.pANN = F, sct = T)
+```
+
+```{r include=FALSE}
+raw.Singleron <- readRDS("data/tmp.data/raw-Singleron-db.RDS")
+```
+
+```{r fig.width=10}
+# Present the res, classification info is saved in meta.data
+DF.name <- colnames(raw.Singleron@meta.data)[grepl("DF.classification", colnames(raw.Singleron@meta.data))]
+# Visualization
+cowplot::plot_grid(ncol = 2, DimPlot(raw.Singleron, group.by = "orig.ident") + NoAxes(),DimPlot(raw.Singleron, group.by = DF.name) + NoAxes())
+```
+
+
+```{r}
+raw.Singleron.singlet <- raw.Singleron[, raw.Singleron@meta.data[, DF.name] == "Singlet"]
+raw.Singleron.singlet
+```
+
+
+## 2.3 Calculate QC
+### 2.3.1 Generating quality metrics
+
+**mitochondrial ratio:**
+```{r}
+raw.Singleron.singlet[["percent.mt"]] <- PercentageFeatureSet(object = raw.Singleron.singlet, pattern = "^MT-", assay = "RNA")
+raw.Singleron.singlet$percent.mt <- raw.Singleron.singlet@meta.data$percent.mt / 100
+```
+
+**ribosome ratio:** 
+```{r}
+raw.Singleron.singlet[["percent.ribo"]] <- PercentageFeatureSet(object = raw.Singleron.singlet, pattern = "^RP[SL]", assay = "RNA")
+raw.Singleron.singlet$percent.ribo <- raw.Singleron.singlet@meta.data$percent.ribo / 100
+```
+
+**hemoglobin ratio:**
+```{r}
+raw.Singleron.singlet[["percent.hb"]] <- PercentageFeatureSet(object = raw.Singleron.singlet, pattern = "^HB[^(P)]", assay = "RNA")
+raw.Singleron.singlet$percent.ribo <- raw.Singleron.singlet@meta.data$percent.ribo / 100
+```
+
+**number of genes detected per UMI:**    
+represent the complexity of our dataset (more genes detected per UMI, more complex our data)
+```{r}
+raw.Singleron.singlet$log10GenesPerUMI <- log10(raw.Singleron.singlet$nFeature_RNA) / log10(raw.Singleron.singlet$nCount_RNA)
+```
+
+### 2.3.2 Assessing the quality metrics:   
+
+**UMI counts (transcripts) per cell**  
+The UMI counts per cell should generally be above 500, that is the low end of what we expect. If UMI counts are between 500-1000 counts, it is usable but the cells probably should have been sequenced more deeply.    
+
+* Visualize the number UMIs/transcripts per cell    
+
+```{r}
+raw.Singleron.singlet@meta.data %>% 
+  	ggplot(aes(color=orig.ident, x=nCount_RNA, fill= orig.ident)) + 
+  	geom_density(alpha = 0.2) + 
+  	scale_x_log10() + 
+  	theme_classic() +
+  	ylab("Cell density") +
+  	geom_vline(xintercept = 500)
+```
+
+**Genes detected per cell**  
+For high quality data, the proportional histogram should contain a single large peak that represents cells that were encapsulated. 
+
+* Visualize the distribution of genes detected per cell via histogram
+
+```{r}
+raw.Singleron.singlet@meta.data %>% 
+  	ggplot(aes(color=orig.ident, x=nFeature_RNA, fill= orig.ident)) + 
+  	geom_density(alpha = 0.2) + 
+  	theme_classic() +
+  	scale_x_log10() + 
+  	geom_vline(xintercept = 200)
+```
+
+
+**UMIs vs. genes detected**  
+Cells that are poor quality are likely to have low genes and UMIs per cell, and correspond to the data points in the bottom left quadrant of the plot. Cells have a high number of UMIs but only a few number of genes could be dying cells, but also could represent a population of a low complexity celltype (i.e red blood cells).  
+
+
+* Visualize the correlation between genes detected and number of UMIs and determine whether strong presence of cells with low numbers of genes/UMIs
+
+```{r fig.width = 8}
+raw.Singleron.singlet@meta.data %>% 
+  	ggplot(aes(x=nCount_RNA, y=nFeature_RNA, color=percent.mt)) + 
+  	geom_point() + 
+	scale_colour_gradient(low = "gray90", high = "black") +
+  	stat_smooth(method=lm) +
+  	scale_x_log10() + 
+  	scale_y_log10() + 
+  	theme_classic() +
+  	geom_vline(xintercept = 500) +
+  	geom_hline(yintercept = 200) +
+  	facet_wrap(~orig.ident)
+```
+
+**Complexity**
+Outlier cells in these samples might be cells that have a less complex RNA species than other cells. Sometimes we can detect contamination with low complexity cell types like red blood cells via this metric. Generally, we expect the novelty score to be above 0.80.
+
+* Visualize the overall complexity of the gene expression by visualizing the genes detected per UMI
+
+```{r}
+raw.Singleron.singlet@meta.data %>%
+  	ggplot(aes(x=log10GenesPerUMI, color = orig.ident, fill=orig.ident)) +
+  	geom_density(alpha = 0.2) +
+  	theme_classic() +
+  	geom_vline(xintercept = 0.8)
+```
+
+**Mitochondrial counts ratio**
+Mitochondrial read fractions are only high in particularly low count cells with few detected genes. This could be indicative of damaged/dying cells whose cytoplasmic mRNA has leaked out through a broken membrane, and thus, only mRNA located in the mitochondria is still conserved.  
+
+* Visualize the distribution of mitochondrial gene expression detected per cell
+
+```{r}
+raw.Singleron.singlet@meta.data %>% 
+  	ggplot(aes(color=orig.ident, x=percent.mt, fill=orig.ident)) + 
+  	geom_density(alpha = 0.2) + 
+  	scale_x_log10() + 
+  	theme_classic() +
+  	geom_vline(xintercept = 0.2)
+```
+
+
+**Ribosome counts ratio**
+This metric can identify whether there is a large amount of ribosome contamination from dead or dying cells.
+
+* Visualize the distribution of ribosome gene expression detected per cell
+
+```{r}
+raw.Singleron.singlet@meta.data %>% 
+  	ggplot(aes(color=orig.ident, x=percent.ribo, fill=orig.ident)) + 
+  	geom_density(alpha = 0.2) + 
+  	scale_x_log10() + 
+  	theme_classic() +
+  	geom_vline(xintercept = 0.01)
+```
+
+
+**Hemoglobin counts ratio**
+Check hemoglobin contamination from red blood cell leak.
+
+* Visualize the distribution of mitochondrial gene expression detected per cell
+
+```{r}
+raw.Singleron.singlet@meta.data %>% 
+  	ggplot(aes(color=orig.ident, x=percent.hb, fill=orig.ident)) + 
+  	geom_density(alpha = 0.2) + 
+  	scale_x_log10() + 
+  	theme_classic() +
+  	geom_vline(xintercept = 0.25)
+```
+
+
+## 2.4 Filtering
+### 2.4.1 Cell-level filtering
+
+* nCount > 500  
+* nFeature > 200 (p2-ERM 589 cells, preserve the data)  
+* log10GenesPerUMI > 0.8  
+* percent.mt < 0.2  
+* percent.ribo < 0.01  
+* percent.hb < 0.25  
+
+```{r}
+filteredData <- subset(x = raw.Singleron.singlet, 
+                         subset= (nCount_RNA >= 500) & 
+                           (nFeature_RNA >= 200) & 
+                           (log10GenesPerUMI > 0.80) & 
+                           (percent.mt < 0.20) & 
+                           (percent.ribo < 0.01) & 
+                           (percent.hb < 0.25))
+filteredData
+```
+
+### 2.4.2 Gene-level filtering
+
+First we will remove genes that have zero expression in all cells. Additionally, we will perform some filtering by prevalence. If a gene is only expressed in a handful of cells, it is not particularly meaningful. For our data we choose to **keep only genes which are expressed in 3 or more cells**.
+
+```{r}
+# Extract counts
+counts <- GetAssayData(object = filteredData, slot = "counts",assay = "RNA")
+
+# Output a logical vector for every gene on whether the more than zero counts per cell
+nonzero <- counts > 0
+
+# Sums all TRUE values and returns TRUE if more than 3 TRUE values per gene
+keep_genes <- Matrix::rowSums(nonzero) >= 3
+
+# Only keeping those genes expressed in more than 3 cells
+filtered_counts <- counts[keep_genes, ]
+
+# Reassign to filtered Seurat object
+clean.Singleron <- CreateSeuratObject(filtered_counts, meta.data = filteredData@meta.data)
+
+clean.Singleron
+```
+
+---
+
+# 3. QC--10X
+## 3.1 Data examining
+cell number:    
+```{r}
+dim(raw.10X)
+```
+
+Counts per cell:    
+```{r}
+counts_per_cell <- Matrix::colSums(raw.10X)
+hist(log10(counts_per_cell+1),main='counts per cell',col='Thistle')
+```
+
+Genes per cell:    
+```{r}
+genes_per_cell <- Matrix::colSums(raw.10X@assays$RNA@counts > 0)
+hist(log10(genes_per_cell+1), main='genes per cell', col='Thistle')
+```
+
+## 3.2 Remove Doublets
+
+### 3.2.1 Pre-process Seurat object
+
+```{r message=FALSE, warning=FALSE,fig.width = 5,cache = TRUE}
+raw.10X <- SCTransform(raw.10X, verbose = F)
+raw.10X <- RunPCA(raw.10X, npcs = 30, verbose = F)
+ElbowPlot(raw.10X,ndims = 30)
+```
+
+```{r}
+# Set dim 1:20
+pc.num.10X=1:20
+```
+
+```{r}
+raw.10X <- RunUMAP(raw.10X, dims=pc.num.10X,verbose = F)
+raw.10X <- FindNeighbors(raw.10X, reduction = "pca", dims = pc.num.10X)
+```
+
+```{r fig.height=8,fig.width = 8}
+checkRes <- FindClusters(object = raw.10X, resolution = c(seq(.1,1.4,.2)), verbose = F)
+clustree(checkRes@meta.data,prefix = "SCT_snn_res.")
+```
+
+```{r}
+raw.10X <- FindClusters(raw.10X, resolution = 0.5)
+```
+
+### 3.2.2 pK Identification
+
+```{r eval=FALSE}
+# Optimize the parameters
+sweep.res.list <- paramSweep_v3(raw.10X, PCs = pc.num.10X, sct = T)
+# Use log transform
+sweep.stats <- summarizeSweep(sweep.res.list, GT = F)
+```
+
+```{r include=FALSE}
+load("data/tmp.data/sweepStats-10X.RData")
+```
+
+```{r fig.width = 4}
+# Show the best parameter
+bcmvn <- find.pK(sweep.stats)
+```
+
+```{r}
+# Extract the best pK
+pK_bcmvn <- bcmvn$pK[which.max(bcmvn$BCmetric)] %>% as.character() %>% as.numeric()
+pK_bcmvn
+```
+
+### 3.2.3 Homotypic Doublet Proportion Estimate
+
+>doublet rate is based on 10X Genomics User Guide
+
+```{r}
+# Estimate the percentage of homotypic doublets
+homotypic.prop <- modelHomotypic(raw.10X$seurat_clusters)
+
+DoubletRate = 0.09
+nExp_poi <- round(DoubletRate*ncol(raw.10X)) 
+# Adjust for homotypic doublets
+nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
+```
+
+### 3.2.4 Run DoubletFinder
+
+```{r eval=FALSE}
+raw.10X <- doubletFinder_v3(raw.10X, PCs = pc.num.10X, pN = 0.25, pK = pK_bcmvn, nExp = nExp_poi.adj, reuse.pANN = F, sct = T)
+```
+
+```{r include=FALSE}
+raw.10X <- readRDS("data/tmp.data/raw-10X-db.RDS")
+```
+
+```{r fig.width = 10}
+# Present the res, classification info is saved in meta.data
+DF.name <- colnames(raw.10X@meta.data)[grepl("DF.classification", colnames(raw.10X@meta.data))]
+# Visualization
+cowplot::plot_grid(ncol = 2, DimPlot(raw.10X, group.by = "orig.ident") + NoAxes(),DimPlot(raw.10X, group.by = DF.name) + NoAxes())
+```
+
+
+```{r}
+raw.10X.singlet <- raw.10X[, raw.10X@meta.data[, DF.name] == "Singlet"]
+raw.10X.singlet
+```
+
+
+## 3.3 Calculate QC
+### 3.3.1 Generating quality metrics
+
+**mitochondrial ratio:**
+```{r}
+raw.10X.singlet[["percent.mt"]] <- PercentageFeatureSet(object = raw.10X.singlet, pattern = "^MT-", assay = "RNA")
+raw.10X.singlet$percent.mt <- raw.10X.singlet@meta.data$percent.mt / 100
+```
+
+**ribosome ratio:** 
+```{r}
+raw.10X.singlet[["percent.ribo"]] <- PercentageFeatureSet(object = raw.10X.singlet, pattern = "^RP[SL]", assay = "RNA")
+raw.10X.singlet$percent.ribo <- raw.10X.singlet@meta.data$percent.ribo / 100
+```
+
+**hemoglobin ratio:**
+```{r}
+raw.10X.singlet[["percent.hb"]] <- PercentageFeatureSet(object = raw.10X.singlet, pattern = "^HB[^(P)]", assay = "RNA")
+raw.10X.singlet$percent.ribo <- raw.10X.singlet@meta.data$percent.ribo / 100
+```
+
+**number of genes detected per UMI:**    
+
+```{r}
+raw.10X.singlet$log10GenesPerUMI <- log10(raw.10X.singlet$nFeature_RNA) / log10(raw.10X.singlet$nCount_RNA)
+```
+
+### 3.3.2 Assessing the quality metrics:   
+
+**UMI counts (transcripts) per cell**  
+
+* Visualize the number UMIs/transcripts per cell    
+
+```{r}
+raw.10X.singlet@meta.data %>% 
+  ggplot(aes(color=orig.ident, x=nCount_RNA, fill= orig.ident)) + 
+  geom_density(alpha = 0.2) + 
+  scale_x_log10() + 
+  theme_classic() +
+  ylab("Cell density") +
+  geom_vline(xintercept = 500)
+```
+
+**Genes detected per cell**  
+
+* Visualize the distribution of genes detected per cell via histogram
+
+```{r}
+raw.10X.singlet@meta.data %>% 
+  ggplot(aes(color=orig.ident, x=nFeature_RNA, fill= orig.ident)) + 
+  geom_density(alpha = 0.2) + 
+  theme_classic() +
+  scale_x_log10() + 
+  geom_vline(xintercept = 300)
+```
+
+
+**UMIs vs. genes detected**  
+
+* Visualize the correlation between genes detected and number of UMIs and determine whether strong presence of cells with low numbers of genes/UMIs
+
+```{r fig.width = 8}
+raw.10X.singlet@meta.data %>% 
+  ggplot(aes(x=nCount_RNA, y=nFeature_RNA, color=percent.mt)) + 
+  geom_point() + 
+  scale_colour_gradient(low = "gray90", high = "black") +
+  stat_smooth(method=lm) +
+  scale_x_log10() + 
+  scale_y_log10() + 
+  theme_classic() +
+  geom_vline(xintercept = 500) +
+  geom_hline(yintercept = 300) +
+  facet_wrap(~orig.ident)
+```
+
+**Complexity**  
+
+* Visualize the overall complexity of the gene expression by visualizing the genes detected per UMI
+
+```{r}
+raw.10X.singlet@meta.data %>%
+  ggplot(aes(x=log10GenesPerUMI, color = orig.ident, fill=orig.ident)) +
+  geom_density(alpha = 0.2) +
+  theme_classic() +
+  geom_vline(xintercept = 0.8)
+```
+
+**Mitochondrial counts ratio**  
+
+* Visualize the distribution of mitochondrial gene expression detected per cell
+
+```{r}
+raw.10X.singlet@meta.data %>% 
+  ggplot(aes(color=orig.ident, x=percent.mt, fill=orig.ident)) + 
+  geom_density(alpha = 0.2) + 
+  scale_x_log10() + 
+  theme_classic() +
+  geom_vline(xintercept = 0.2)
+```
+
+
+**Ribosome counts ratio**  
+* Visualize the distribution of ribosome gene expression detected per cell
+
+```{r}
+raw.10X.singlet@meta.data %>% 
+  ggplot(aes(color=orig.ident, x=percent.ribo, fill=orig.ident)) + 
+  geom_density(alpha = 0.2) + 
+  scale_x_log10() + 
+  theme_classic() +
+  geom_vline(xintercept = 0.01)
+```
+
+
+**Hemoglobin counts ratio**  
+
+* Visualize the distribution of mitochondrial gene expression detected per cell
+
+```{r}
+raw.10X.singlet@meta.data %>% 
+  ggplot(aes(color=orig.ident, x=percent.hb, fill=orig.ident)) + 
+  geom_density(alpha = 0.2) + 
+  scale_x_log10() + 
+  theme_classic() +
+  geom_vline(xintercept = 0.25)
+```
+
+
+## 3.4 Filtering
+### 3.4.1 Cell-level filtering
+
+* nCount > 500  
+* nFeature > 300
+* log10GenesPerUMI > 0.8  
+* percent.mt < 0.2  
+* percent.ribo < 0.01  
+* percent.hb < 0.25  
+
+```{r}
+filteredData <- subset(x = raw.10X.singlet, 
+                       subset= (nCount_RNA >= 500) & 
+                         (nFeature_RNA >= 300) & 
+                         (log10GenesPerUMI > 0.80) & 
+                         (percent.mt < 0.20) & 
+                         (percent.ribo < 0.01) & 
+                         (percent.hb < 0.25))
+filteredData
+```
+
+### 3.4.2 Gene-level filtering
+
+For our data we choose to **keep only genes which are expressed in 3 or more cells**.
+
+```{r}
+# Extract counts
+counts <- GetAssayData(object = filteredData, slot = "counts",assay = "RNA")
+
+# Output a logical vector for every gene on whether the more than zero counts per cell
+nonzero <- counts > 0
+
+# Sums all TRUE values and returns TRUE if more than 3 TRUE values per gene
+keep_genes <- Matrix::rowSums(nonzero) >= 3
+
+# Only keeping those genes expressed in more than 3 cells
+filtered_counts <- counts[keep_genes, ]
+
+# Reassign to filtered Seurat object
+clean.10X <- CreateSeuratObject(filtered_counts, meta.data = filteredData@meta.data)
+
+clean.10X
+```
+
+---
+
+# 4. Integration
+
+## 4.1 SCTransform
+
+```{r}
+mergedData <- merge(x = clean.10X, y = clean.Singleron)
+```
+
+```{r cache = TRUE}
+mergedData <- SCTransform(mergedData, vars.to.regress = c("percent.mt"), variable.features.n = 3000, verbose = F, seed.use = 27)
+
+mergedData <- RunPCA(mergedData, npcs = 30, verbose = FALSE)
+ElbowPlot(mergedData,ndims = 30)
+```
+
+```{r}
+# Set dim 1:20
+pc.num=1:25
+```
+
+
+* Add metadata
+
+```{r}
+sampledata <- read.table("data/tmp.data/sampleData.txt", header = T, sep = "\t")
+head(sampledata)
+```
+
+```{r}
+metaNow <- mergedData@meta.data
+metaNow$barcode <- rownames(metaNow)
+
+usedCol <- metaNow[,c("barcode","orig.ident")]
+usedCol <- merge(usedCol, sampledata, by = "orig.ident")
+rownames(usedCol) <- usedCol$barcode
+
+mergedData <- AddMetaData(object = mergedData, metadata = usedCol)
+```
+
+```{r}
+head(mergedData@meta.data)
+```
+
+## 4.2 Check before integration
+
+```{r}
+# Run UMAP
+mergedData <- RunUMAP(mergedData, dims = pc.num, reduction = "pca")
+mergedData <- RunTSNE(object = mergedData, dims = pc.num)
+```
+
+```{r fig.width = 12}
+p15 <- DimPlot(mergedData, group.by = "SampleName", reduction = "umap") 
+p16 <- DimPlot(object = mergedData, group.by = "SampleName", reduction = "tsne")
+plot_grid(p15,p16,rel_widths = c(2,2))
+```
+
+```{r fig.width = 12}
+p23 <- DimPlot(mergedData, group.by = "Status", reduction = "umap") 
+p24 <- DimPlot(object = mergedData, group.by = "Status", reduction = "tsne")
+plot_grid(p23,p24,rel_widths = c(2,2))
+```
+
+```{r fig.width = 12}
+p25 <- DimPlot(mergedData, group.by = "Platform", reduction = "umap") 
+p26 <- DimPlot(object = mergedData, group.by = "Platform", reduction = "tsne")
+plot_grid(p25,p26,rel_widths = c(2,2))
+```
+
+```{r}
+saveRDS(mergedData,file = "data/tmp.data/mergedData.RDS")
+```
+
+* compute the LISI
+
+```{r include=FALSE}
+load("data/tmp.data/lisi-res.RData")
+```
+
+```{r eval=FALSE}
+library(lisi)
+library(Rcpp)
+
+umap.co <- Embeddings(object =mergedData[["umap"]])
+tsne.co <- Embeddings(object =mergedData[["tsne"]])
+
+meta.df <- data.frame(SampleName = mergedData$SampleName, Platform = mergedData$Platform, Status = mergedData$Status)
+```
+
+```{r eval=FALSE}
+umap.res <- compute_lisi(umap.co, meta.df, c("SampleName", "Platform", "Status"))
+tsne.res <- compute_lisi(tsne.co, meta.df, c("SampleName", "Platform", "Status"))
+```
+
+```{r}
+summary(umap.res)
+```
+
+```{r}
+summary(umap.res)
+```
+
+> Each row in the output data frame corresponds to a cell from X. The score (e.g. max 9.862) indicates the effective number of different categories represented in the local neighborhood of each cell. If the cells are well-mixed, then we might expect the LISI score to be near 14 for a categorical variable with 14 categories.
+
+
+## 4.3 Integration
+
+### 4.3.1 Harmony Integration
+
+**Harmony**  
+
+> https://github.com/immunogenomics/harmony  
+> Overview of Harmony algorithm: PCA embeds cells into a space with reduced dimensionality. Harmony accepts the cell coordinates in this reduced space and runs an iterative algorithm to adjust for dataset specific effects. 
+
+```{r}
+library(Rcpp)
+library(rlang)
+
+integrated.h <- harmony::RunHarmony(mergedData, group.by.vars ="SampleName", assay.use = "SCT", plot_convergence = TRUE)
+```
+
+```{r}
+# Run UMAP
+integrated.h <- RunUMAP(integrated.h, dims = 1:25, reduction = "harmony")
+integrated.h <- RunTSNE(object = integrated.h, dims = 1:25, reduction = "harmony")
+```
+
+```{r fig.width = 12}
+p13 <- DimPlot(integrated.h, group.by = "SampleName", reduction = "umap") 
+p14 <- DimPlot(object = integrated.h, group.by = "SampleName", reduction = "tsne")
+plot_grid(p13,p14,rel_widths = c(2,2))
+```
+
+
+```{r fig.width = 12}
+p21 <- DimPlot(integrated.h, group.by = "Status", reduction = "umap") 
+p22 <- DimPlot(object = integrated.h, group.by = "Status", reduction = "tsne")
+plot_grid(p21,p22,rel_widths = c(2,2))
+```
+
+```{r fig.width = 12}
+p27 <- DimPlot(integrated.h, group.by = "Platform", reduction = "umap") 
+p28 <- DimPlot(object = integrated.h, group.by = "Platform", reduction = "tsne")
+plot_grid(p27,p28,rel_widths = c(2,2))
+```
+
+* Check integration by computing the LISI
+
+```{r eval=FALSE}
+library(lisi)
+h.umap.co <- Embeddings(object =integrated.h[["umap"]])
+h.tsne.co <- Embeddings(object =integrated.h[["tsne"]])
+
+meta.df <- data.frame(SampleName = integrated.h$SampleName, Platform = integrated.h$Platform, Status = integrated.h$Status)
+h.umap.res <- compute_lisi(h.umap.co, meta.df, c("SampleName", "Platform", "Status"))
+h.tsne.res <- compute_lisi(h.tsne.co, meta.df, c("SampleName", "Platform", "Status"))
+```
+
+```{r}
+summary(h.umap.res)
+```
+
+```{r}
+summary(h.tsne.res)
+```
+
+### 4.3.2 Seurat Integration
+
+```{r eval=FALSE}
+split_seurat <- SplitObject(mergedData, split.by = "SampleName")
+```
+
+* Integration by sample name
+
+```{r eval=FALSE}
+# Select the most variable features to use for integration
+integ_features <- SelectIntegrationFeatures(object.list = split_seurat, nfeatures = 3000)
+```
+
+Then, prepare the SCTransform object for integration.
+
+```{r eval=FALSE}
+# Prepare the SCT list object for integration
+split_seurat <- PrepSCTIntegration(object.list = split_seurat, 
+                                   anchor.features = integ_features)
+```
+
+Perform CCA, find the best buddies or anchors and filter incorrect anchors.  
+```{r eval=FALSE}
+# Find best buddies - can take a while to run
+integ_anchors <- FindIntegrationAnchors(object.list = split_seurat, 
+                                        normalization.method = "SCT", 
+                                        anchor.features = integ_features)
+```
+
+Integrate across conditions.
+```{r eval=FALSE}
+# Integrate across conditions
+integrated.s <- IntegrateData(anchorset = integ_anchors, normalization.method = "SCT")
+```
+
+```{r include=FALSE}
+integrated.s <- readRDS("data/integrated.obj/integrated-by-sample-seurat.RDS")
+```
+
+```{r}
+integrated.s
+```
+
+```{r}
+integrated.s <- RunPCA(integrated.s, npcs = 30, verbose = F)
+integrated.s <- RunUMAP(integrated.s, dims = 1:25, reduction = "pca")
+integrated.s <- RunTSNE(object = integrated.s, dims = 1:25)
+```
+
+```{r fig.width = 12}
+p17 <- DimPlot(integrated.s, group.by = "SampleName", reduction = "umap") 
+p18 <- DimPlot(object = integrated.s, group.by = "SampleName", reduction = "tsne")
+plot_grid(p17,p18,rel_widths = c(2,2))
+```
+
+```{r fig.width = 12}
+p19 <- DimPlot(integrated.s, group.by = "Status", reduction = "umap") 
+p20 <- DimPlot(object = integrated.s, group.by = "Status", reduction = "tsne")
+plot_grid(p19,p20,rel_widths = c(2,2))
+```
+
+```{r fig.width = 12}
+p29 <- DimPlot(integrated.s, group.by = "Platform", reduction = "umap") 
+p30 <- DimPlot(object = integrated.s, group.by = "Platform", reduction = "tsne")
+plot_grid(p29,p30,rel_widths = c(2,2))
+```
+
+* Check integration by computing the LISI
+
+```{r eval=FALSE}
+library(lisi)
+
+s.umap.co <- Embeddings(object =integrated.s[["umap"]])
+s.tsne.co <- Embeddings(object =integrated.s[["tsne"]])
+
+meta.df <- data.frame(SampleName = integrated.s$SampleName, Platform = integrated.s$Platform, Status = integrated.s$Status)
+s.umap.res <- compute_lisi(s.umap.co, meta.df, c("SampleName", "Platform", "Status"))
+s.tsne.res <- compute_lisi(s.tsne.co, meta.df, c("SampleName", "Platform", "Status"))
+```
+
+```{r}
+summary(s.umap.res)
+```
+
+```{r}
+summary(s.tsne.res)
+```
+
+### 4.3.3 Check biomarkers
+
+```{r fig.width=12,eval=FALSE}
+FeaturePlot(object = integrated.s, features = c(" FCRL6"), cols = c("grey", "blue"), reduction = "tsne", split.by = "Status")
+```
+
+```{r fig.width=12,eval=FALSE}
+FeaturePlot(object = integrated.s, features = c("ENO2"), cols = c("grey", "blue"), reduction = "tsne",split.by = "Status")
+```
+
+---
+
+# 5. Clustering cells based on top PCs
+
+```{r}
+# Determine the K-nearest neighbor graph
+integrated.cluster <- FindNeighbors(object = integrated.s, dims = pc.num)
+```
+
+```{r fig.height=9,fig.width = 8}
+checkRes <- FindClusters(object = integrated.cluster, resolution = c(seq(0.1,0.9,0.1)), verbose = F)
+clustree(checkRes@meta.data,prefix = "integrated_snn_res.")
+```
+
+
+* cluster evaluation method: **scclusteval**
+
+To assess which `k.param` is best to use by subsampling the original data. Do it later.
+
+```{r}
+integrated.cluster <- FindClusters(integrated.cluster, resolution = 0.4)
+```
+
+---
+
+# 6. Find Cluster Biomarkers
+
+`min.pct` argument requires a gene to be detected at a minimum percentage in either of the two groups of cells
+
+```{r cache=TRUE}
+# find all markers of cluster 1
+cluster1.markers <- FindMarkers(object = integrated.cluster, ident.1 = 0, min.pct = 0.20)
+print(x = head(x = cluster1.markers, n = 5))
+```
+
+```{r eval=FALSE}
+# find markers for every cluster compared to all remaining cells, report
+# only the positive ones
+# job::job(find_markers= { markers <- FindAllMarkers(object = set1.obj, only.pos = TRUE, min.pct = 0.25, thresh.use = 0.25)
+# })
+
+markers <- FindAllMarkers(object = integrated.cluster, only.pos = TRUE, min.pct = 0.20, thresh.use = 0.25)
+```
+
+```{r include=FALSE}
+markers <- readRDS("data/tmp.data/markers-integrated.RDS")
+```
+
+```{r}
+top10 <- markers %>% group_by(cluster) %>% top_n(10, avg_logFC)
+top10
+```
+
+```{r}
+write.csv(top10, file = "data/integrated.obj/markers/top10-markers-for-Res4.csv")
+```
+
+* Check if biomarkers chosen can differentiate effectively ("data/tmp.data/inte-heatmap.pdf")
+
+```{r eval=FALSE}
+# setting slim.col.label to TRUE will print just the cluster IDS instead of
+# every cell name
+DoHeatmap(object = integrated.cluster, features = top10$gene, label = TRUE,group.by = "seurat_clusters")
+```
+
+---
+
+# 6. Annotation(SingleR 1.0.1)
+
+
+```{r}
+# load the ref and choose intersection
+library(SingleR)
+load("data/annotation.obj/annoRef/hpca.rda")
+integrated.test <- as.data.frame(integrated.cluster[["SCT"]]@counts)
+common_hpca <- intersect(rownames(integrated.cluster), rownames(hpca$data))
+hpca$data <- hpca$data[common_hpca,]
+```
+
+```{r cache=TRUE}
+singler <- CreateSinglerObject(integrated.test, annot = hpca$data, project.name = "integrated", species = "Human", numCores = 36, clusters = integrated.cluster$seurat_clusters)
+
+singler$meta.data$orig.ident <- integrated.cluster@meta.data$SampleName
+singler$meta.data$xy <- integrated.cluster@reductions$tsne@cell.embeddings # the tSNE coordinates
+singler$meta.data$clusters <- integrated.cluster@meta.data$seurat_clusters
+
+saveRDS(singler,file="data/annotation.obj/integrated-singler.RDS")
+```
+
+
+```{r fig.width=10}
+out1 <- SingleR.PlotTsne(singler$singler[[1]]$SingleR.single.main, singler$meta.data$xy,do.label = TRUE, do.letters =F, labels =singler$singler[[1]]$SingleR.single.main$labels, dot.size = 2)
+out1$p
+```
+
+```{r fig.width=10}
+out2 <- SingleR.PlotTsne(singler$singler[[1]]$SingleR.single.main, singler$meta.data$xy,do.label = TRUE,do.letters = F,labels=singler$meta.data$clusters, dot.size = 2,label.size = 4)
+out2$p
+```
+
+
+<details><summary>Session Info</summary>
+```{r echo=FALSE}
+sessionInfo()
+```
+</details>

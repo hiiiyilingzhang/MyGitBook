@@ -62,15 +62,15 @@ stackexchange上的法子都不管用，需要root装依赖？无所谓了随便
 
 * harmony
 
-![image-20211015183214339](<../.gitbook/assets/image-20211015183214339 (1).png>)
+![](<../.gitbook/assets/image-20211015183214339 (1).png>)
 
-![image-20211015183355315](../.gitbook/assets/image-20211015183355315.png)
+![](../.gitbook/assets/image-20211015183355315.png)
 
 * Seurat
 
-![image-20211015203241348](<../.gitbook/assets/image-20211015203241348 (1).png>)
+![](<../.gitbook/assets/image-20211015203241348 (1).png>)
 
-![image-20211015203312754](<../.gitbook/assets/image-20211015203312754 (1).png>)
+![](<../.gitbook/assets/image-20211015203312754 (1).png>)
 
 * Seurat is better than harmony in this situation
 
@@ -93,5 +93,13 @@ do it later
 ![](<../.gitbook/assets/image-20211018080250598 (1).png>)
 
 我用的SCT
+
+
+
+
+
+### Rmd is here
+
+{% file src="../.gitbook/assets/Report4_integration.Rmd" %}
 
 \
