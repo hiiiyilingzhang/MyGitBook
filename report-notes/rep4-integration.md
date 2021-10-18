@@ -104,9 +104,11 @@ do it later
 
 我觉着要用SCT
 
+### singler我吐了
 
+![](<../.gitbook/assets/image (3).png>)
 
-
+难锅，跑到97%了报错，内存不够我还能咋办，加了行`gc()`
 
 ### Rmd is here
 
