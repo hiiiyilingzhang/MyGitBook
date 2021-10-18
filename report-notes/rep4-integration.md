@@ -1,6 +1,6 @@
 # 😣 Rep4 integration
 
-### DoubletFinder--Singleron doublet rate
+### DoubletFinder--Singleron doublet rate chosen
 
 ![](../.gitbook/assets/image.png)
 
@@ -22,6 +22,14 @@ p2-ERM: 589
 
 **Totle: 1796**
 
+### 去批次方法比较
+
+\[2020-Genome Bio.-A benchmark of batch-effect correction methods for single-cell RNA sequencing data]\([https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1850-9](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-019-1850-9))
+
+作者基于10个人和鼠的dataset，使用t-SNE和UMAP可视化技术，结合kBET、 LISI、 ASW、ARI 和DEG等基准度量，来评估对14种去批次效应算法的批次效应校正结果。
+
+![](<../.gitbook/assets/image (2).png>)
+
 ### 不要靠近kBET 会变得不幸
 
 基于奇异值降解的基础上进行降维
@@ -37,6 +45,8 @@ p2-ERM: 589
 [https://github.com/immunogenomics/LISI](https://github.com/immunogenomics/LISI)
 
 > Learn more about how we use LISI to measure single cell integration methods in the Harmony paper: Korsunsky, I. et al. [Fast, sensitive and accurate integration of single-cell data with Harmony.](https://www.nature.com/articles/s41592-019-0619-0) Nat. Methods (2019)
+
+局部辛普森指数 。LISI主要通过具有固定的复杂度的局部距离分布选择临近的邻居。临近值的选择然后用于计算辛普森指数多样性，这是这个邻域呈现出来的有效类型数，指数通过用来计算批次标签，接近于期待批次数的分数，表明批次混合效果好。
 
 ### Harmony给爷爬
 
@@ -74,7 +84,7 @@ stackexchange上的法子都不管用，需要root装依赖？无所谓了随便
 
 * Seurat is better than harmony in this situation
 
-## scclusteval
+### scclusteval
 
 **Evaluating single-cell cluster stability using the Jaccard similarity index**
 
@@ -92,7 +102,7 @@ do it later
 
 ![](<../.gitbook/assets/image-20211018080250598 (1).png>)
 
-我用的SCT
+我觉着要用SCT
 
 
 
