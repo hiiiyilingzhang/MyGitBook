@@ -108,7 +108,12 @@ do it later
 
 ![](<../.gitbook/assets/image (3).png>)
 
-难锅，跑到97%了报错，内存不够我还能咋办，加了行`gc()`
+难锅，跑到97%了报错，内存不够我还能咋办，加了行`gc()`,anyway 好想用上新版single
+
+1. redhat R-3.5.2: 只能装上1.0.1的singler
+2. bytlib R-3.6.0: 装不上依赖包scuttle（调用了huangb目录下的，但是一个依赖包需要更新；本地装少libicui18n.so.58库，locate一下发现在anaconda里有，改了路径还是装不了）
+3. bytlib R-4.0.2 + zhangls libpath: 调用scuttle时少依赖包sparseMatrixStats, 安装时报错C++14 standard requested but CXX14 is not defined（需要sudo）
+4. bytlib R-4.0.2 + 自己装包：...................................takes like forever
 
 ### Rmd is here
 
