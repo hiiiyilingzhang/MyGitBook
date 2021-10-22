@@ -2,7 +2,7 @@
 
 ### DoubletFinder--Singleron doublet rate chosen
 
-![](../.gitbook/assets/image.png)
+![](<../.gitbook/assets/image (5).png>)
 
 p1-blood: 0.037\*8916=329
 
@@ -28,7 +28,7 @@ p2-ERM: 589
 
 作者基于10个人和鼠的dataset，使用t-SNE和UMAP可视化技术，结合kBET、 LISI、 ASW、ARI 和DEG等基准度量，来评估对14种去批次效应算法的批次效应校正结果。
 
-![](<../.gitbook/assets/image (2).png>)
+![](<../.gitbook/assets/image (2) (1).png>)
 
 ### 不要靠近kBET 会变得不幸
 
@@ -36,7 +36,7 @@ p2-ERM: 589
 
 算法的主要假设是 如果临近样本的子集标签分布与完整数据集的分布相同，则表明该重复实验能够很好的混合，相反，在存在批次效应下，生物学重复将会在整个数据集中产生批次标签的倾斜分布。KBET 通过采用卡方分布检测固定大小的随机邻域从而确定它们是否很好的被混合了。然后是得到一个二进制的结果用来计算后续的拒绝率，这表明，拒绝率越低样本混合的越好。
 
-![134bil](<../.gitbook/assets/image (1).png>)
+![134bil](<../.gitbook/assets/image (1) (1).png>)
 
 ![](../.gitbook/assets/image-20211013223446241.png)
 
@@ -106,7 +106,7 @@ do it later
 
 ### singler我吐了
 
-![](<../.gitbook/assets/image (3).png>)
+![](<../.gitbook/assets/image (3) (1).png>)
 
 难锅，跑到97%了报错，内存不够我还能咋办，加了行`gc()`,anyway 好想用上新版single
 
