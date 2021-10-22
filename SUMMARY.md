@@ -1,8 +1,6 @@
 # Table of contents
 
-* [Report Notes](README.md)
-  * [😣 Rep4 integration](report-notes/rep4-integration.md)
-* [Meetings](meetings/README.md)
-  * [211021](meetings/211021.md)
-* [Grad-related](grad-related/README.md)
-  * [🤝 开题](grad-related/kai-ti.md)
+* [Compile Errors](README.md)
+  * [1⃣ libpng16.so.16](compile-errors/libpng16.so.16.md)
+* [R library Errors](r-library-errors/README.md)
+  * [Seurat-markvario](r-library-errors/seurat-markvario.md)
