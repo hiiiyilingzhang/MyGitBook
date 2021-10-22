@@ -32,27 +32,23 @@ knitr::opts_chunk$set(
 
 ---
 
-**RDS Data Description:**  
-
----
+RDS Data Description:  
 
 * raw.data/: 所有原始数据  
+
 * clean.obj/clean-Singleron.RDS: 经过去Doublets+QC后数据  
 * clean.obj/clean-10X.RDS: 经过去Doublets+QC后数据  
 
----
 
 * integrated.obj/integrated-by-platform.RDS: 用Harmony去除了平台间的批次效应，并添加详细MetaData
 * integrated.obj/integrated-by-sample-harmony.RDS: 用Harmony去除了样本间的批次效应
 * integrated.obj/integrated-by-sample-seurat.RDS: 用seurat的内置方法去除了样本间的批次效应
 * integrated.obj/integrated-by-sample-cluster.RDS: 用seurat的内置方法去除了样本间的批次效应，完成`FindCluster`
 
----
 
 * ERM.obj/ERMData: 提取ERM样本，已完成`FindClusters()`
 * ERM.obj/ERMData-rawAnno-Res3.RDS: 经过SingleR注释后的数据，基于`resolution=0.3`  
 
----
 
 * PBMC.obj/raw-integratedPBMC.RDS: 经过`IntegrateData()`后的数据, 没做`PCA()`
 * PBMC.obj/precessed-integratedPBMC.RDS: 完成`PCA()`, `FindClusters()`之后的
@@ -66,6 +62,7 @@ library(Seurat)
 library(dplyr)
 library(ggplot2)
 library(cowplot)
+
 library(rlang)
 ```
 
@@ -749,7 +746,7 @@ clean.10X
 
 ## 4.1 SCTransform
 
-```{r cache=TRUE}
+```{r}
 mergedData <- merge(x = clean.10X, y = clean.Singleron)
 ```
 
@@ -814,6 +811,10 @@ p26 <- DimPlot(object = mergedData, group.by = "Platform", reduction = "tsne")
 plot_grid(p25,p26,rel_widths = c(2,2))
 ```
 
+```{r}
+saveRDS(mergedData,file = "data/tmp.data/mergedData.RDS")
+```
+
 * compute the LISI
 
 ```{r include=FALSE}
@@ -855,7 +856,7 @@ summary(umap.res)
 > https://github.com/immunogenomics/harmony  
 > Overview of Harmony algorithm: PCA embeds cells into a space with reduced dimensionality. Harmony accepts the cell coordinates in this reduced space and runs an iterative algorithm to adjust for dataset specific effects. 
 
-```{r cache=TRUE}
+```{r}
 library(Rcpp)
 library(rlang)
 
@@ -863,10 +864,6 @@ integrated.h <- harmony::RunHarmony(mergedData, group.by.vars ="SampleName", ass
 ```
 
 ```{r}
-integrated.h
-```
-
-```{r cache=TRUE}
 # Run UMAP
 integrated.h <- RunUMAP(integrated.h, dims = 1:25, reduction = "harmony")
 integrated.h <- RunTSNE(object = integrated.h, dims = 1:25, reduction = "harmony")
@@ -954,7 +951,7 @@ integrated.s <- readRDS("data/integrated.obj/integrated-by-sample-seurat.RDS")
 integrated.s
 ```
 
-```{r cache=TRUE}
+```{r}
 integrated.s <- RunPCA(integrated.s, npcs = 30, verbose = F)
 integrated.s <- RunUMAP(integrated.s, dims = 1:25, reduction = "pca")
 integrated.s <- RunTSNE(object = integrated.s, dims = 1:25)
@@ -1032,14 +1029,6 @@ To assess which `k.param` is best to use by subsampling the original data. Do it
 integrated.cluster <- FindClusters(integrated.cluster, resolution = 0.4)
 ```
 
-```{r fig.width=12}
-DimPlot(integrated.cluster, group.by = "seurat_clusters", reduction = "umap",split.by = "Status") 
-```
-
-```{r fig.width=12}
-DimPlot(object = integrated.s, group.by = "seurat_clusters", reduction = "tsne",split.by = "Status")
-```
-
 ---
 
 # 6. Find Cluster Biomarkers
@@ -1087,7 +1076,7 @@ DoHeatmap(object = integrated.cluster, features = top10$gene, label = TRUE,group
 # 6. Annotation(SingleR 1.0.1)
 
 
-```{r eval=FALSE}
+```{r}
 # load the ref and choose intersection
 library(SingleR)
 load("data/annotation.obj/annoRef/hpca.rda")
@@ -1096,25 +1085,23 @@ common_hpca <- intersect(rownames(integrated.cluster), rownames(hpca$data))
 hpca$data <- hpca$data[common_hpca,]
 ```
 
-```{r eval=FALSE}
+```{r cache=TRUE}
 singler <- CreateSinglerObject(integrated.test, annot = hpca$data, project.name = "integrated", species = "Human", numCores = 36, clusters = integrated.cluster$seurat_clusters)
 
 singler$meta.data$orig.ident <- integrated.cluster@meta.data$SampleName
 singler$meta.data$xy <- integrated.cluster@reductions$tsne@cell.embeddings # the tSNE coordinates
 singler$meta.data$clusters <- integrated.cluster@meta.data$seurat_clusters
+
+saveRDS(singler,file="data/annotation.obj/integrated-singler.RDS")
 ```
 
-```{r include=FALSE}
-library(SingleR)
-singler <- readRDS("data/tmp.data/singler.RDS")
-```
 
 ```{r fig.width=10}
-out1 <- SingleR.PlotTsne(singler$singler[[1]]$SingleR.single.main, singler$meta.data$xy,do.label = FALSE, do.letters =F, labels =singler$singler[[1]]$SingleR.single.main$labels, dot.size = 2)
+out1 <- SingleR.PlotTsne(singler$singler[[1]]$SingleR.single.main, singler$meta.data$xy,do.label = TRUE, do.letters =F, labels =singler$singler[[1]]$SingleR.single.main$labels, dot.size = 2)
 out1$p
 ```
 
-```{r fig.width=8}
+```{r fig.width=10}
 out2 <- SingleR.PlotTsne(singler$singler[[1]]$SingleR.single.main, singler$meta.data$xy,do.label = TRUE,do.letters = F,labels=singler$meta.data$clusters, dot.size = 2,label.size = 4)
 out2$p
 ```
