@@ -2,7 +2,7 @@
 
 ### DoubletFinder--Singleron doublet rate chosen
 
-![](<../.gitbook/assets/image (5).png>)
+![](<../.gitbook/assets/image (5) (1).png>)
 
 p1-blood: 0.037\*8916=329
 
@@ -106,7 +106,7 @@ do it later
 
 ### singler我吐了
 
-![](<../.gitbook/assets/image (3) (1).png>)
+![](<../.gitbook/assets/image (3) (1) (1).png>)
 
 难锅，跑到97%了报错，内存不够我还能咋办，加了行`gc()`,anyway 好想用上新版single
 
